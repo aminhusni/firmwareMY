@@ -109,14 +109,19 @@ const RegionInfo regions[] = {
     RDEF(UA_868, 868.0f, 868.6f, 1, 0, 14, true, false, false),
 
     /*
+        Malaysia
         433 - 435 MHz at 100mW, no restrictions.
-        919 - 923 Mhz at 500mW, no restrictions.
-        923 - 924 MHz at 500mW with 1% duty cycle OR frequency hopping. 
-        Frequency hopping is used for 919 - 923 MHz. 
         https://www.mcmc.gov.my/skmmgovmy/media/General/pdf/Short-Range-Devices-Specification.pdf
     */
     RDEF(MY_433, 433.0f, 435.0f, 100, 0, 20, true, false, false),
 
+    /*
+        Malaysia
+        919 - 923 Mhz at 500mW, no restrictions.
+        923 - 924 MHz at 500mW with 1% duty cycle OR frequency hopping.
+        Frequency hopping is used for 919 - 923 MHz.
+        https://www.mcmc.gov.my/skmmgovmy/media/General/pdf/Short-Range-Devices-Specification.pdf
+    */
     RDEF(MY_919, 919.0f, 924.0f, 100, 0, 27, true, true, false),
 
     /*
