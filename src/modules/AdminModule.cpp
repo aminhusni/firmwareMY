@@ -185,12 +185,11 @@ bool AdminModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshta
     case meshtastic_AdminMessage_remove_by_nodenum_tag: {
         LOG_INFO("Client is receiving a remove_nodenum command.\n");
         nodeDB.removeNodeByNum(r->remove_by_nodenum);
-        reboot(DEFAULT_REBOOT_SECONDS);
         break;
     }
     case meshtastic_AdminMessage_enter_dfu_mode_request_tag: {
         LOG_INFO("Client is requesting to enter DFU mode.\n");
-#ifdef ARCH_NRF52
+#if defined(ARCH_NRF52) || defined(ARCH_RP2040)
         enterDfuMode();
 #endif
         break;
@@ -281,6 +280,7 @@ void AdminModule::handleSetOwner(const meshtastic_User &o)
 
 void AdminModule::handleSetConfig(const meshtastic_Config &c)
 {
+    auto changes = SEGMENT_CONFIG;
     auto existingRole = config.device.role;
     bool isRegionUnset = (config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_UNSET);
 
@@ -321,6 +321,11 @@ void AdminModule::handleSetConfig(const meshtastic_Config &c)
         config.lora = c.payload_variant.lora;
         if (isRegionUnset && config.lora.region > meshtastic_Config_LoRaConfig_RegionCode_UNSET) {
             config.lora.tx_enabled = true;
+            initRegion();
+            if (strcmp(moduleConfig.mqtt.root, default_mqtt_root) == 0) {
+                sprintf(moduleConfig.mqtt.root, "%s/%s", default_mqtt_root, myRegion->name);
+                changes = SEGMENT_CONFIG | SEGMENT_MODULECONFIG;
+            }
         }
         break;
     case meshtastic_Config_bluetooth_tag:
@@ -330,7 +335,7 @@ void AdminModule::handleSetConfig(const meshtastic_Config &c)
         break;
     }
 
-    saveChanges(SEGMENT_CONFIG);
+    saveChanges(changes);
 }
 
 void AdminModule::handleSetModuleConfig(const meshtastic_ModuleConfig &c)
