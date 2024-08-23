@@ -6,6 +6,7 @@
 #include <time.h>
 
 static RTCQuality currentQuality = RTCQualityNone;
+uint32_t lastSetFromPhoneNtpOrGps = 0;
 
 RTCQuality getRTCQuality()
 {
@@ -96,25 +97,34 @@ void readFromRTC()
  *
  * If we haven't yet set our RTC this boot, set it from a GPS derived time
  */
-bool perhapsSetRTC(RTCQuality q, const struct timeval *tv)
+bool perhapsSetRTC(RTCQuality q, const struct timeval *tv, bool forceUpdate)
 {
     static uint32_t lastSetMsec = 0;
     uint32_t now = millis();
 
     bool shouldSet;
-    if (q > currentQuality) {
+    if (forceUpdate) {
         shouldSet = true;
-        LOG_DEBUG("Upgrading time to quality %d\n", q);
-    } else if (q == RTCQualityGPS && (now - lastSetMsec) > (12 * 60 * 60 * 1000UL)) {
-        // Every 12 hrs we will slam in a new GPS time, to correct for local RTC clock drift
+        LOG_DEBUG("Overriding current RTC quality (%s) with incoming time of RTC quality of %s\n", RtcName(currentQuality),
+                  RtcName(q));
+    } else if (q > currentQuality) {
+        shouldSet = true;
+        LOG_DEBUG("Upgrading time to quality %s\n", RtcName(q));
+    } else if (q >= RTCQualityNTP && (now - lastSetMsec) > (12 * 60 * 60 * 1000UL)) {
+        // Every 12 hrs we will slam in a new GPS or Phone GPS / NTP time, to correct for local RTC clock drift
         shouldSet = true;
         LOG_DEBUG("Reapplying external time to correct clock drift %ld secs\n", tv->tv_sec);
-    } else
+    } else {
         shouldSet = false;
+        LOG_DEBUG("Current RTC quality: %s. Ignoring time of RTC quality of %s\n", RtcName(currentQuality), RtcName(q));
+    }
 
     if (shouldSet) {
         currentQuality = q;
         lastSetMsec = now;
+        if (currentQuality >= RTCQualityNTP) {
+            lastSetFromPhoneNtpOrGps = now;
+        }
 
         // This delta value works on all platforms
         timeStartMsec = now;
@@ -162,6 +172,24 @@ bool perhapsSetRTC(RTCQuality q, const struct timeval *tv)
     }
 }
 
+const char *RtcName(RTCQuality quality)
+{
+    switch (quality) {
+    case RTCQualityNone:
+        return "None";
+    case RTCQualityDevice:
+        return "Device";
+    case RTCQualityFromNet:
+        return "Net";
+    case RTCQualityNTP:
+        return "NTP";
+    case RTCQualityGPS:
+        return "GPS";
+    default:
+        return "Unknown";
+    }
+}
+
 /**
  * Sets the RTC time if the provided time is of higher quality than the current RTC time.
  *
@@ -198,12 +226,11 @@ bool perhapsSetRTC(RTCQuality q, struct tm &t)
  */
 int32_t getTZOffset()
 {
-    time_t now;
+    time_t now = getTime(false);
     struct tm *gmt;
-    now = time(NULL);
     gmt = gmtime(&now);
     gmt->tm_isdst = -1;
-    return (int16_t)difftime(now, mktime(gmt));
+    return (int32_t)difftime(now, mktime(gmt));
 }
 
 /**
@@ -233,6 +260,7 @@ uint32_t getValidTime(RTCQuality minQuality, bool local)
 
 time_t gm_mktime(struct tm *tm)
 {
+#if !MESHTASTIC_EXCLUDE_TZ
     setenv("TZ", "GMT0", 1);
     time_t res = mktime(tm);
     if (*config.device.tzdef) {
@@ -241,4 +269,7 @@ time_t gm_mktime(struct tm *tm)
         setenv("TZ", "UTC0", 1);
     }
     return res;
+#else
+    return mktime(tm);
+#endif
 }

@@ -4,7 +4,8 @@
   "trunk.enableWindows": true,
   "files.insertFinalNewline": false,
   "files.trimFinalNewlines": false,
-  "files.associations": {
-    "*.xbm": "cpp"
+  "cmake.configureOnOpen": false,
+  "[cpp]": {
+    "editor.defaultFormatter": "trunk.io"
   }
 }

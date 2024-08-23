@@ -2,10 +2,21 @@
 
 #include "Observer.h"
 #include "mesh-pb-constants.h"
+#include <iterator>
 #include <string>
+#include <vector>
 
 // Make sure that we never let our packets grow too large for one BLE packet
 #define MAX_TO_FROM_RADIO_SIZE 512
+
+#if meshtastic_FromRadio_size > MAX_TO_FROM_RADIO_SIZE
+#error "meshtastic_FromRadio_size is too large for our BLE packets"
+#endif
+#if meshtastic_ToRadio_size > MAX_TO_FROM_RADIO_SIZE
+#error "meshtastic_ToRadio_size is too large for our BLE packets"
+#endif
+
+#define SPECIAL_NONCE 69420
 
 /**
  * Provides our protobuf based API which phone/PC clients can use to talk to our device
@@ -20,13 +31,15 @@ class PhoneAPI
     : public Observer<uint32_t> // FIXME, we shouldn't be inheriting from Observer, instead use CallbackObserver as a member
 {
     enum State {
-        STATE_SEND_NOTHING,      // Initial state, don't send anything until the client starts asking for config
-        STATE_SEND_MY_INFO,      // send our my info record
-        STATE_SEND_NODEINFO,     // states progress in this order as the device sends to to the client
-        STATE_SEND_CHANNELS,     // Send all channels
-        STATE_SEND_CONFIG,       // Replacement for the old Radioconfig
-        STATE_SEND_MODULECONFIG, // Send Module specific config
+        STATE_SEND_NOTHING, // Initial state, don't send anything until the client starts asking for config
+        STATE_SEND_MY_INFO, // send our my info record
+        STATE_SEND_OWN_NODEINFO,
         STATE_SEND_METADATA,
+        STATE_SEND_CHANNELS,        // Send all channels
+        STATE_SEND_CONFIG,          // Replacement for the old Radioconfig
+        STATE_SEND_MODULECONFIG,    // Send Module specific config
+        STATE_SEND_OTHER_NODEINFOS, // states progress in this order as the device sends to to the client
+        STATE_SEND_FILEMANIFEST,    // Send file manifest
         STATE_SEND_COMPLETE_ID,
         STATE_SEND_PACKETS // send packets or debug strings
     };
@@ -53,6 +66,9 @@ class PhoneAPI
     // Keep MqttClientProxyMessage packet just as packetForPhone
     meshtastic_MqttClientProxyMessage *mqttClientProxyMessageForPhone = NULL;
 
+    // Keep ClientNotification packet just as packetForPhone
+    meshtastic_ClientNotification *clientNotification = NULL;
+
     /// We temporarily keep the nodeInfo here between the call to available and getFromRadio
     meshtastic_NodeInfo nodeInfoForPhone = meshtastic_NodeInfo_init_default;
 
@@ -62,6 +78,8 @@ class PhoneAPI
     /// Use to ensure that clients don't get confused about old messages from the radio
     uint32_t config_nonce = 0;
     uint32_t readIndex = 0;
+
+    std::vector<meshtastic_FileInfo> filesManifest = {};
 
     void resetReadIndex() { readIndex = 0; }
 
@@ -89,14 +107,14 @@ class PhoneAPI
      */
     size_t getFromRadio(uint8_t *buf);
 
+    void sendConfigComplete();
+
     /**
      * Return true if we have data available to send to the phone
      */
     bool available();
 
     bool isConnected() { return state != STATE_SEND_NOTHING; }
-
-    void setInitialState() { state = STATE_SEND_MY_INFO; }
 
   protected:
     /// Our fromradio packet while it is being assembled

@@ -1,7 +1,10 @@
-#include "BMP085Sensor.h"
-#include "../mesh/generated/meshtastic/telemetry.pb.h"
-#include "TelemetrySensor.h"
 #include "configuration.h"
+
+#if !MESHTASTIC_EXCLUDE_ENVIRONMENTAL_SENSOR
+
+#include "../mesh/generated/meshtastic/telemetry.pb.h"
+#include "BMP085Sensor.h"
+#include "TelemetrySensor.h"
 #include <Adafruit_BMP085.h>
 #include <typeinfo>
 
@@ -23,9 +26,14 @@ void BMP085Sensor::setup() {}
 
 bool BMP085Sensor::getMetrics(meshtastic_Telemetry *measurement)
 {
+    measurement->variant.environment_metrics.has_temperature = true;
+    measurement->variant.environment_metrics.has_barometric_pressure = true;
+
     LOG_DEBUG("BMP085Sensor::getMetrics\n");
     measurement->variant.environment_metrics.temperature = bmp085.readTemperature();
     measurement->variant.environment_metrics.barometric_pressure = bmp085.readPressure() / 100.0F;
 
     return true;
 }
+
+#endif
